@@ -39,19 +39,13 @@ def parse_args():
     parser = argparse.ArgumentParser(description="SIFT-based frame deduplication")
     parser.add_argument("--processed_dir", type=str,
                         default="/content/drive/MyDrive/soccernet-caption/processed",
-                        help="Output directory from extract_frames.py")
+                        )
     parser.add_argument("--splits", nargs="+",
                         default=["train", "valid", "test"],
                         choices=["train", "valid", "test", "challenge"])
-    parser.add_argument("--inlier_threshold", type=int, default=80,
-                        help="RANSAC inlier count above which two frames are "
-                             "considered near-duplicates (default: 80)")
-    parser.add_argument("--lowe_ratio", type=float, default=0.75,
-                        help="Lowe's ratio test threshold for SIFT matching "
-                             "(default: 0.75, as in the original SIFT paper)")
-    parser.add_argument("--min_matches", type=int, default=10,
-                        help="Minimum number of raw matches needed before "
-                             "running RANSAC (default: 10)")
+    parser.add_argument("--inlier_threshold", type=int, default=80)
+    parser.add_argument("--lowe_ratio", type=float, default=0.75)
+    parser.add_argument("--min_matches", type=int, default=10)
     return parser.parse_args()
 
 
@@ -167,23 +161,21 @@ def deduplicate_game_group(pairs: list[dict], args) -> list[dict]:
         )
 
         if inliers >= args.inlier_threshold:
-            # Near-duplicate: keep the sharper frame
+            # keep the sharper frame
             if curr_sharpness > prev_sharpness:
                 # Replace last kept frame with the sharper current one
                 kept[-1] = pair
                 prev_kp, prev_desc = curr_kp, curr_desc
                 prev_sharpness = curr_sharpness
-            # else: keep the already-retained frame, discard current
+            # keep the already-retained frame, discard current
         else:
-            # Distinct frame: keep it and advance the comparison window
+            # keep it and advance the comparison window
             kept.append(pair)
             prev_kp, prev_desc = curr_kp, curr_desc
             prev_sharpness = curr_sharpness
 
     return kept
 
-
-# ── Main ──────────────────────────────────────────────────────────────────────
 
 def process_split(split: str, processed_dir: Path, args):
     split_dir  = processed_dir / split
@@ -198,7 +190,7 @@ def process_split(split: str, processed_dir: Path, args):
 
     print(f"  Loaded {len(pairs)} pairs from '{split}'")
 
-    # Group pairs by (game, half) so we only compare within the same sequence
+    # Group pairs by (game, half)
     groups = defaultdict(list)
     for pair in pairs:
         key = (pair["game"], pair["half"])

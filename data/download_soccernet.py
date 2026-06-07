@@ -22,27 +22,28 @@ def parse_args():
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="/content/drive/MyDrive/soccernet-caption",
-        help="Directory to save downloaded data (default: Google Drive path for Colab)",
+        default="/content/drive/MyDrive/soccernet-caption"
     )
     parser.add_argument(
         "--splits",
         nargs="+",
         default=["train", "valid", "test"],
         choices=["train", "valid", "test", "challenge"],
-        help="Which splits to download (default: train valid test)",
     )
     parser.add_argument(
         "--resolution",
         type=str,
         default="224p",
         choices=["224p", "720p"],
-        help="Video resolution to download (default: 224p — sufficient for frame extraction)",
     )
     parser.add_argument(
         "--annotations_only",
         action="store_true",
-        help="Download only annotations/features, skip videos (no NDA password needed)",
+    )
+
+    parser.add_argument(
+        "--video_only",
+        action="store_true",
     )
     return parser.parse_args()
 
@@ -56,15 +57,15 @@ def main():
 
     downloader = SNdl(LocalDirectory=str(output_dir))
 
-    # ── Step 1: Download caption annotations (no password required) ──────────
-    print("\n[1/2] Downloading caption annotations (2024 edition)...")
-    downloader.downloadDataTask(
-        task="caption-2024",
-        split=args.splits,
-    )
-    print("Annotations downloaded.")
+    # Download caption annotations (no password required)
+    if not args.video_only:
+        print("\n[1/2] Downloading caption annotations (2024 edition)...")
+        downloader.downloadDataTask(task="caption-2024")
+        print("Annotations downloaded.")
+    else:
+        print("\n[1/2] Skipping annotations (--video_only flag set).")
 
-    # ── Step 2: Download videos (NDA password required) ──────────────────────
+    # Download videos (NDA password required)
     if not args.annotations_only:
         print("\n[2/2] Downloading videos (NDA password required)...")
         print("Enter your SoccerNet NDA password (from your registration email):")

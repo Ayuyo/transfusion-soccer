@@ -41,9 +41,8 @@ from torchvision import transforms
 
 
 IMAGE_SIZE   = 512   # must match VAE input (sd-vae-ft-mse supports up to 512)
-MAX_TEXT_LEN = 256   # max commentary length in bytes — longer strings truncated
-MIN_TEXT_LEN = 4     # discard degenerate captions shorter than this
-
+MAX_TEXT_LEN = 64    # max commentary length in BPE tokens (~250 characters)
+MIN_TEXT_LEN = 2     # discard degenerate captions shorter than 2 tokens
 
 
 IMAGE_TRANSFORM = transforms.Compose([
@@ -54,20 +53,28 @@ IMAGE_TRANSFORM = transforms.Compose([
 ])
 
 
+import tiktoken
+_BPE = tiktoken.get_encoding("gpt2")
+VOCAB_SIZE = _BPE.n_vocab  # 50257 for gpt2
+
 
 def encode_text(text: str, max_len: int = MAX_TEXT_LEN) -> torch.Tensor:
     """
-    Byte-level encoding: UTF-8 string → LongTensor of byte values.
-    Vocabulary size = 256. Consistent with lucidrains/transfusion-pytorch.
+    GPT-2 BPE encoding: string → LongTensor of subword token IDs.
+    Vocabulary size = 50257. Much cleaner than byte-level — avoids the
+    garbled-word problem caused by invalid UTF-8 sequences.
     """
-    byte_values = list(text.encode("utf-8"))[:max_len]
-    return torch.tensor(byte_values, dtype=torch.long)
+    ids = _BPE.encode(text)[:max_len]
+    return torch.tensor(ids, dtype=torch.long)
 
 
 def decode_text(tokens: torch.Tensor) -> str:
-    """Inverse of encode_text. Invalid bytes replaced with U+FFFD."""
-    byte_values = tokens.cpu().numpy().astype(np.uint8).tobytes()
-    return byte_values.decode("utf-8", errors="replace")
+    """Inverse of encode_text using GPT-2 BPE."""
+    ids = tokens.cpu().tolist()
+    # Filter to valid vocab range (in case model generates out-of-vocab IDs)
+    ids = [i for i in ids if 0 <= i < VOCAB_SIZE]
+    return _BPE.decode(ids)
+
 
 
 class SoccerCommentaryDataset(Dataset):
@@ -107,7 +114,7 @@ class SoccerCommentaryDataset(Dataset):
 
         for pair in raw:
             commentary = pair.get("commentary", "").strip()
-            if len(commentary.encode("utf-8")) < self.min_text_len:
+            if len(_BPE.encode(commentary)) < self.min_text_len:
                 skipped_short += 1
                 continue
             pair["commentary"] = commentary
@@ -138,7 +145,7 @@ class SoccerCommentaryDataset(Dataset):
                     print(f"  [!] Skipping unreadable frame: {pair['frame_path']} ({e})")
                 continue
 
-        # Should never reach here unless 5 consecutive frames are corrupted
+        # never reach here unless 5 consecutive frames are corrupted
         raise RuntimeError(f"5 consecutive frames failed to load starting at idx={idx}")
 
 
@@ -153,7 +160,6 @@ def collate_fn(
     image_tensors = [item[0] for item in batch]
     text_tensors  = [item[1] for item in batch]
     return image_tensors, text_tensors
-
 
 
 if __name__ == "__main__":
